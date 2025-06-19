@@ -4,59 +4,74 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 
-def compute_vix_futures(T_t, Vt, lambda_, theta, xi, eta=30/365):
+
+def compute_vix_futures(Vt, lambda_, theta, xi, T_t, eta=30/252):
     """
-    Compute VIX futures price
+    Compute VIX futures price using integral representation
     
     Parameters:
-    T_t : float - time to maturity (T-t)
     Vt : float - current squared volatility
     lambda_ : float - mean reversion speed
     theta : float - long-term mean level
     xi : float - volatility of volatility
+    T_t : float - time to maturity (in years)
     eta : float - VIX time window (default 30 days)
     
     Returns:
-    float - VIX futures price
+    float - VIX futures price (in volatility points)
     """
+    
     # Constants from derivation
     a_prime = theta * (eta - (1 - np.exp(-lambda_ * eta)) / lambda_)
     b_prime = (1 - np.exp(-lambda_ * eta)) / lambda_
-    
+
+
     def d_function(tau, s):
-        """Compute d(τ;s) function"""
-        numerator = 2 * lambda_ * s
-        denominator = np.exp(lambda_ * tau) * (2 * lambda_ + xi**2 * s) - xi**2 * s
-        return numerator / denominator
-    
+        numerator = 2 * lambda_ * s * np.exp(lambda_ * tau)
+        denominator = xi**2 * s * (np.exp(lambda_ * tau) - 1) - 2 * lambda_
+        
+        # if abs(denominator) < 1e-10:
+        #     return 0  # Avoid division by very small numbers
+        return -numerator / denominator
+
     def c_function(tau, s):
-        """Compute c(τ;s) function"""
-        term1 = -2 * theta * lambda_ / xi**2
-        term2 = lambda_ * tau + np.log(2 * lambda_)
-        term3 = np.log(np.exp(lambda_ * tau) * (2 * lambda_ + xi**2 * s) - xi**2 * s)
-        return term1 * (term2 - term3)
-    
+        """
+        Compute c(τ;s) function with numerical stability
+        Using the corrected formula:
+        c(T-t,s) = (2*θ*λ/ξ²)*(log((2λ) - (e^(λ(T-t))-1)*s*ξ²) - log(2λ))
+        """
+        # Calculate the term inside the first logarithm
+        inner_term = 2 * lambda_ - (np.exp(lambda_ * tau) - 1) * s * xi**2
+        
+        # Handle numerical stability
+        if inner_term <= 0:
+            return np.inf  # Log of negative number
+        
+        # Calculate the full expression
+        log_term = np.log(inner_term) - np.log(2 * lambda_)
+        return (2 * theta * lambda_ / xi**2) * log_term 
+        
     def ell_function(s):
-        """Compute ℓ(s,T-t,Vt) function"""
+        """Compute ℓ(s,T-t,Vt) function with numerical stability"""
         return (s * a_prime + 
-                c_function(T_t, s * b_prime) + 
-                d_function(T_t, s * b_prime) * Vt)
+                    c_function(T_t, s * b_prime) + 
+                    d_function(T_t, s * b_prime) * Vt)
     
     def integrand(s):
         """Compute the integrand for the VIX futures formula"""
-        if s < 1e-10:  # Handle near-zero values
-            return 0
-        try:
-            result = (1 - np.exp(-ell_function(s))) / (s**1.5)
-            return result
-        except (OverflowError, ZeroDivisionError, RuntimeWarning):
-            return 0
+        ell = ell_function(s)
+        if np.isinf(ell):
+            return 1/(s**1.5)
+            
+        return (1 - np.exp(-ell)) / (s**1.5)
+        
+     
     
-    # Numerical integration with upper bound adjustment for practical computation
-    integral, _ = integrate.quad(integrand, 0, 100)  # Upper bound of 100 is sufficient in most cases
+    # Numerical integration with bounded upper limit
+    integral, _ = integrate.quad(integrand, 0, np.inf, limit=1000)
     
-    # Final VIX futures price formula from Derivatives_part3 file
-    return 50 / np.sqrt(np.pi * eta) * integral
+    return (50 / np.sqrt(np.pi * eta)) * integral
+
 
 def analyze_single_parameter(base_params, maturity=1.0):
     """
@@ -77,7 +92,14 @@ def analyze_single_parameter(base_params, maturity=1.0):
         
         for value in param_range:
             params[param_name] = value
-            price = compute_vix_futures(maturity, **params)
+            # Extract parameters in the correct order for the function
+            price = compute_vix_futures(
+                Vt=params['Vt'],
+                lambda_=params['lambda_'],
+                theta=params['theta'],
+                xi=params['xi'],
+                T_t=maturity
+            )
             prices.append(price)
             
         plt.figure(figsize=(10, 6))
@@ -140,11 +162,17 @@ def analyze_parameter_pairs(base_params, maturity=1.0):
         # Compute prices for each parameter combination
         for i in range(len(range1)):
             for j in range(len(range2)):
+                # Inside the nested loop:
                 params = base_params.copy()
                 params[param1] = X[j,i]
                 params[param2] = Y[j,i]
-                Z[j,i] = compute_vix_futures(maturity, **params)
-        
+                Z[j,i] = compute_vix_futures(
+                    Vt=params['Vt'],
+                    lambda_=params['lambda_'],
+                    theta=params['theta'],
+                    xi=params['xi'],
+                    T_t=maturity
+                )
         # Create heatmap
         plt.figure(figsize=(10, 8))
         heatmap = plt.pcolormesh(X, Y, Z, cmap='viridis', shading='auto')
@@ -174,7 +202,13 @@ def analyze_term_structure(base_params):
     maturities = np.linspace(0.1, 2.0, 30)
     
     # Base case
-    base_prices = [compute_vix_futures(T, **base_params) for T in maturities]
+    base_prices = [compute_vix_futures(
+        Vt=base_params['Vt'],
+        lambda_=base_params['lambda_'],
+        theta=base_params['theta'],
+        xi=base_params['xi'],
+        T_t=T
+    ) for T in maturities]
     
     plt.figure(figsize=(12, 8))
     plt.plot(maturities, base_prices, 'k-', linewidth=2, label='Base Case')
@@ -183,14 +217,26 @@ def analyze_term_structure(base_params):
     for lambda_val in [1.0, 3.0, 5.0]:
         params = base_params.copy()
         params['lambda_'] = lambda_val
-        prices = [compute_vix_futures(T, **params) for T in maturities]
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities]
         plt.plot(maturities, prices, '--', label=f'λ={lambda_val}')
     
     # Vary theta
     for theta_val in [0.02, 0.04, 0.08]:
         params = base_params.copy()
         params['theta'] = theta_val
-        prices = [compute_vix_futures(T, **params) for T in maturities]
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities]
         plt.plot(maturities, prices, ':', label=f'θ={theta_val}')
     
     plt.xlabel('Time to Maturity (Years)')
@@ -207,13 +253,25 @@ def analyze_term_structure(base_params):
     params1 = base_params.copy()
     params1['Vt'] = 0.08
     params1['theta'] = 0.03
-    prices1 = [compute_vix_futures(T, **params1) for T in maturities]
+    prices1 = [compute_vix_futures(
+        Vt=params1['Vt'],
+        lambda_=params1['lambda_'],
+        theta=params1['theta'],
+        xi=params1['xi'],
+        T_t=T
+    ) for T in maturities]
     
     # Case 2: Vt < theta (low current volatility)
     params2 = base_params.copy()
     params2['Vt'] = 0.03
     params2['theta'] = 0.08
-    prices2 = [compute_vix_futures(T, **params2) for T in maturities]
+    prices2 = [compute_vix_futures(
+        Vt=params2['Vt'],
+        lambda_=params2['lambda_'],
+        theta=params2['theta'],
+        xi=params2['xi'],
+        T_t=T
+    ) for T in maturities]
     
     plt.plot(maturities, prices1, 'b-', linewidth=2, label='Case Vt > θ')
     plt.plot(maturities, prices2, 'r-', linewidth=2, label='Case Vt < θ')
@@ -245,10 +303,18 @@ def analyze_theta_vt_at_different_maturities(base_params):
         
         for j in range(len(vt_range)):
             for k in range(len(theta_range)):
+                # Inside the nested loop:
                 params = base_params.copy()
                 params['Vt'] = X[k,j]
                 params['theta'] = Y[k,j]
-                Z[k,j] = compute_vix_futures(maturity, **params)
+                Z[k,j] = compute_vix_futures(
+                    Vt=params['Vt'],
+                    lambda_=params['lambda_'],
+                    theta=params['theta'],
+                    xi=params['xi'],
+                    T_t=maturity
+                )   
+
         
         im = axes[i].pcolormesh(X, Y, Z, cmap='viridis', shading='auto')
         axes[i].set_title(f'Maturity T-t = {maturity} years')

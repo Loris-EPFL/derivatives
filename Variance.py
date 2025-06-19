@@ -3,30 +3,31 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from mpl_toolkits.mplot3d import Axes3D
 
-def compute_variance_futures(T_t, accrued_variance, Vt, lambda_, theta, xi, T_t0):
+
+
+def compute_variance_futures(Vt, lambda_, theta, xi, T_t, T_t0, accrued_variance):
     """
     Compute variance futures price
     
     Parameters:
-    T_t : float - time to maturity (T-t)
-    accrued_variance : float - accrued variance ∫(t0 to t) (100√Vu)²du
     Vt : float - current squared volatility
     lambda_ : float - mean reversion speed
     theta : float - long-term mean level
-    xi : float - volatility of volatility (note: doesn't affect the price)
-    T_t0 : float - total time span (T-t0)
+    xi : float - volatility of volatility
+    T_t : float - time to maturity (in years)
+    T_t0 : float - total time span (in years)
+    accrued_variance : float - accrued variance
     
     Returns:
-    float - Variance futures price
+    float - Variance futures price (in variance points)
     """
-    # Calculate a*(T-t) and b*(T-t) from the formula
-    a_star = theta * ((T_t) - (1 - np.exp(-lambda_ * T_t)) / lambda_)
+    # Calculate a*(T-t) and b*(T-t)
+    a_star = theta * (T_t - (1 - np.exp(-lambda_ * T_t)) / lambda_)
     b_star = (1 - np.exp(-lambda_ * T_t)) / lambda_
     
-    # The accrued_variance input is already (100√Vu)²
-    futures_price = (1 / T_t0) * (accrued_variance + 10000 * (a_star + b_star * Vt))
-    
-    return futures_price
+    # Formula from Derivatives_part3_bis without correction term
+    return (1 / (T_t0)) * (accrued_variance + 10000*(a_star + b_star * Vt))
+
 
 def analyze_individual_parameters(base_params):
     """

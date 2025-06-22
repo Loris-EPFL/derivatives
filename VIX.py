@@ -437,12 +437,12 @@ def analyze_complete(base_params):
     print("1. Analyzing individual parameter sensitivity...")
     analyze_single_parameter(base_params)
     
-    print("\n2. Analyzing parameter pair interactions...")
-    analyze_parameter_pairs(base_params)
+    # print("\n2. Analyzing parameter pair interactions...")
+    # analyze_parameter_pairs(base_params)
     
     print("\n3. Analyzing term structure effects...")
     analyze_term_structure(base_params)
     
-    print("\n4. Analyzing theta-Vt interaction at different maturities...")
-    analyze_theta_vt_at_different_maturities(base_params)
+    # print("\n4. Analyzing theta-Vt interaction at different maturities...")
+    # analyze_theta_vt_at_different_maturities(base_params)
 

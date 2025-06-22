@@ -193,7 +193,7 @@ def analyze_parameter_pairs(base_params, maturity=1.0):
         ax.set_title(f'3D Surface: {label1}-{label2} Interaction')
         fig.colorbar(surf, shrink=0.5, aspect=5)
         plt.show()
-
+        
 def analyze_term_structure(base_params):
     """
     Analyze term structure effects
@@ -210,10 +210,12 @@ def analyze_term_structure(base_params):
         T_t=T
     ) for T in maturities]
     
+    # Create separate plots for each parameter to avoid overcrowding
+    
+    # 1. Lambda effect on term structure
     plt.figure(figsize=(12, 8))
     plt.plot(maturities, base_prices, 'k-', linewidth=2, label='Base Case')
     
-    # Vary lambda
     for lambda_val in [1.0, 3.0, 5.0]:
         params = base_params.copy()
         params['lambda_'] = lambda_val
@@ -226,8 +228,18 @@ def analyze_term_structure(base_params):
         ) for T in maturities]
         plt.plot(maturities, prices, '--', label=f'λ={lambda_val}')
     
-    # Vary theta
-    for theta_val in [0.02, 0.04, 0.08]:
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('VIX Futures Price')
+    plt.title('Term Structure: Effect of Mean Reversion Speed (λ)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 2. Theta effect on term structure
+    plt.figure(figsize=(12, 8))
+    plt.plot(maturities, base_prices, 'k-', linewidth=2, label='Base Case')
+    
+    for theta_val in [0.01, 0.03, 0.05, 0.07, 0.09]:  # More theta values
         params = base_params.copy()
         params['theta'] = theta_val
         prices = [compute_vix_futures(
@@ -241,40 +253,59 @@ def analyze_term_structure(base_params):
     
     plt.xlabel('Time to Maturity (Years)')
     plt.ylabel('VIX Futures Price')
-    plt.title('Term Structure of VIX Futures Prices')
+    plt.title('Term Structure: Effect of Long-term Mean Level (θ)')
     plt.grid(True)
     plt.legend()
     plt.show()
     
-    # Analyze case where Vt > theta vs Vt < theta
+    # 3. Xi effect on term structure (Added as requested)
+    plt.figure(figsize=(12, 8))
+    plt.plot(maturities, base_prices, 'k-', linewidth=2, label='Base Case')
+    
+    for xi_val in [0.2, 0.3, 0.5, 0.7, 0.9]:  # Testing various xi values
+        params = base_params.copy()
+        params['xi'] = xi_val
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities]
+        plt.plot(maturities, prices, '-.', label=f'ξ={xi_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('VIX Futures Price')
+    plt.title('Term Structure: Effect of Volatility of Volatility (ξ)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 4. Analyze Vt vs theta relationship
     plt.figure(figsize=(12, 8))
     
-    # Case 1: Vt > theta (high current volatility)
-    params1 = base_params.copy()
-    params1['Vt'] = 0.08
-    params1['theta'] = 0.03
-    prices1 = [compute_vix_futures(
-        Vt=params1['Vt'],
-        lambda_=params1['lambda_'],
-        theta=params1['theta'],
-        xi=params1['xi'],
-        T_t=T
-    ) for T in maturities]
+    # Various combinations of Vt and theta
+    scenarios = [
+        {'Vt': 0.08, 'theta': 0.03, 'label': 'Vt(0.08) > θ(0.03)', 'color': 'b'},
+        {'Vt': 0.05, 'theta': 0.05, 'label': 'Vt(0.05) = θ(0.05)', 'color': 'g'},
+        {'Vt': 0.03, 'theta': 0.08, 'label': 'Vt(0.03) < θ(0.08)', 'color': 'r'},
+        {'Vt': 0.02, 'theta': 0.09, 'label': 'Vt(0.02) << θ(0.09)', 'color': 'm'},
+        {'Vt': 0.09, 'theta': 0.02, 'label': 'Vt(0.09) >> θ(0.02)', 'color': 'c'}
+    ]
     
-    # Case 2: Vt < theta (low current volatility)
-    params2 = base_params.copy()
-    params2['Vt'] = 0.03
-    params2['theta'] = 0.08
-    prices2 = [compute_vix_futures(
-        Vt=params2['Vt'],
-        lambda_=params2['lambda_'],
-        theta=params2['theta'],
-        xi=params2['xi'],
-        T_t=T
-    ) for T in maturities]
+    for scenario in scenarios:
+        params = base_params.copy()
+        params['Vt'] = scenario['Vt']
+        params['theta'] = scenario['theta']
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities]
+        plt.plot(maturities, prices, color=scenario['color'], linewidth=2, label=scenario['label'])
     
-    plt.plot(maturities, prices1, 'b-', linewidth=2, label='Case Vt > θ')
-    plt.plot(maturities, prices2, 'r-', linewidth=2, label='Case Vt < θ')
     plt.xlabel('Time to Maturity (Years)')
     plt.ylabel('VIX Futures Price')
     plt.title('Term Structure: Effect of Vt vs θ Relationship')
@@ -286,14 +317,14 @@ def analyze_theta_vt_at_different_maturities(base_params):
     """
     Analyze Vt-theta interaction at different maturities
     """
-    # Define parameter ranges
+    # Define parameter ranges for heatmaps
     theta_range = np.linspace(0.01, 0.09, 15)
     vt_range = np.linspace(0.01, 0.09, 15)
     
     # Define maturities to analyze
     maturities = [0.1, 0.5, 1.0, 2.0]
     
-    # Set up subplots
+    # Set up subplots for heatmaps
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     axes = axes.flatten()
     
@@ -303,7 +334,6 @@ def analyze_theta_vt_at_different_maturities(base_params):
         
         for j in range(len(vt_range)):
             for k in range(len(theta_range)):
-                # Inside the nested loop:
                 params = base_params.copy()
                 params['Vt'] = X[k,j]
                 params['theta'] = Y[k,j]
@@ -314,7 +344,6 @@ def analyze_theta_vt_at_different_maturities(base_params):
                     xi=params['xi'],
                     T_t=maturity
                 )   
-
         
         im = axes[i].pcolormesh(X, Y, Z, cmap='viridis', shading='auto')
         axes[i].set_title(f'Maturity T-t = {maturity} years')
@@ -326,6 +355,79 @@ def analyze_theta_vt_at_different_maturities(base_params):
     plt.suptitle('Effect of Maturity on Vt-θ Interaction', fontsize=16)
     plt.tight_layout()
     plt.subplots_adjust(top=0.92)
+    plt.show()
+    
+    # Add additional analysis showing different theta values at fixed Vt values
+    maturities_extended = np.linspace(0.1, 2.0, 30)
+    theta_values = [0.01, 0.03, 0.05, 0.07, 0.09]
+    
+    # 1. For low Vt
+    plt.figure(figsize=(12, 8))
+    params = base_params.copy()
+    params['Vt'] = 0.03  # Low Vt
+    
+    for theta_val in theta_values:
+        params['theta'] = theta_val
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities_extended]
+        plt.plot(maturities_extended, prices, label=f'θ={theta_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('VIX Futures Price')
+    plt.title('Term Structure: Different θ Values with Low Vt (0.03)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 2. For medium Vt
+    plt.figure(figsize=(12, 8))
+    params = base_params.copy()
+    params['Vt'] = 0.05  # Medium Vt
+    
+    for theta_val in theta_values:
+        params['theta'] = theta_val
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities_extended]
+        plt.plot(maturities_extended, prices, label=f'θ={theta_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('VIX Futures Price')
+    plt.title('Term Structure: Different θ Values with Medium Vt (0.05)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 3. For high Vt
+    plt.figure(figsize=(12, 8))
+    params = base_params.copy()
+    params['Vt'] = 0.08  # High Vt
+    
+    for theta_val in theta_values:
+        params['theta'] = theta_val
+        prices = [compute_vix_futures(
+            Vt=params['Vt'],
+            lambda_=params['lambda_'],
+            theta=params['theta'],
+            xi=params['xi'],
+            T_t=T
+        ) for T in maturities_extended]
+        plt.plot(maturities_extended, prices, label=f'θ={theta_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('VIX Futures Price')
+    plt.title('Term Structure: Different θ Values with High Vt (0.08)')
+    plt.grid(True)
+    plt.legend()
     plt.show()
 
 def analyze_complete(base_params):

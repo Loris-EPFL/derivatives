@@ -21,6 +21,7 @@ def compute_variance_futures(Vt, lambda_, theta, xi, T_t, T_t0, accrued_variance
     Returns:
     float - Variance futures price (in variance points)
     """
+    # print(lambda_)
     # Calculate a*(T-t) and b*(T-t)
     a_star = theta * (T_t - (1 - np.exp(-lambda_ * T_t)) / lambda_)
     b_star = (1 - np.exp(-lambda_ * T_t)) / lambda_
@@ -173,18 +174,16 @@ def analyze_parameter_pairs(base_params):
 
 def analyze_term_structure(base_params):
     """
-    Analyze term structure of variance futures prices
+    Analyze term structure of variance futures prices with detailed parameter analysis
     """
     # Set up base parameters
-    accrued_variance = 0.02  # Example accrued variance
+    accrued_variance = 0  # Example accrued variance
     T_t0 = 2.0  # Assuming 2 years total time span
     
     # Define maturities range
     maturities = np.linspace(0.1, 1.9, 30)  # Maturity can't exceed T_t0
     
-    plt.figure(figsize=(12, 8))
-    
-    # Base case
+    # Base case for reference
     base_prices = []
     for T_t in maturities:
         price = compute_variance_futures(
@@ -198,10 +197,13 @@ def analyze_term_structure(base_params):
         )
         base_prices.append(price)
     
-    plt.plot(maturities, base_prices, 'k-', linewidth=2, label='Base Case')
+    # 1. Effect of Lambda (mean reversion speed)
+    plt.figure(figsize=(12, 8))
+    plt.plot(maturities, base_prices, 'k-', linewidth=2, label=f'Base Case (λ={base_params["lambda_"]})')
     
-    # Vary lambda
-    for lambda_val in [1.0, 3.0, 5.0]:
+    for lambda_val in [0.5, 1.0, 2.0, 5.0, 10.0]:
+        if lambda_val == base_params['lambda_']:
+            continue  # Skip base case as it's already plotted
         prices = []
         for T_t in maturities:
             price = compute_variance_futures(
@@ -213,44 +215,163 @@ def analyze_term_structure(base_params):
                 xi=base_params['xi'],
                 T_t0=T_t0
             )
+            # print(
+            #     "price found for lambda value : ",
+            #     lambda_val,
+            #     " and maturity : ",
+            #     T_t,
+            #     " is : ",
+            #     price,
+            # )
             prices.append(price)
+        print(prices, "for lambda value : ", lambda_val)
         plt.plot(maturities, prices, '--', label=f'λ={lambda_val}')
-    
-    # Compare Vt > theta vs Vt < theta
-    # Case 1: Vt > theta
-    high_vt_prices = []
-    for T_t in maturities:
-        price = compute_variance_futures(
-            T_t=T_t,
-            accrued_variance=accrued_variance,
-            Vt=0.08,  # High current volatility
-            lambda_=base_params['lambda_'],
-            theta=0.03,  # Low long-term mean
-            xi=base_params['xi'],
-            T_t0=T_t0
-        )
-        high_vt_prices.append(price)
-    
-    # Case 2: Vt < theta
-    low_vt_prices = []
-    for T_t in maturities:
-        price = compute_variance_futures(
-            T_t=T_t,
-            accrued_variance=accrued_variance,
-            Vt=0.03,  # Low current volatility
-            lambda_=base_params['lambda_'],
-            theta=0.08,  # High long-term mean
-            xi=base_params['xi'],
-            T_t0=T_t0
-        )
-        low_vt_prices.append(price)
-    
-    plt.plot(maturities, high_vt_prices, 'b:', linewidth=2, label='Vt > θ')
-    plt.plot(maturities, low_vt_prices, 'r:', linewidth=2, label='Vt < θ')
     
     plt.xlabel('Time to Maturity (Years)')
     plt.ylabel('Variance Futures Price')
-    plt.title('Term Structure of Variance Futures Prices')
+    plt.title('Term Structure of Variance Futures: Effect of Mean Reversion Speed (λ)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 2. Effect of Theta (long-term mean)
+    plt.figure(figsize=(12, 8))
+    plt.plot(maturities, base_prices, 'k-', linewidth=2, label=f'Base Case (θ={base_params["theta"]})')
+    
+    for theta_val in [0.01, 0.03, 0.05, 0.07, 0.09]:
+        if abs(theta_val - base_params['theta']) < 1e-6:
+            continue  # Skip base case as it's already plotted
+        prices = []
+        for T_t in maturities:
+            price = compute_variance_futures(
+                T_t=T_t,
+                accrued_variance=accrued_variance,
+                Vt=base_params['Vt'],
+                lambda_=base_params['lambda_'],
+                theta=theta_val,
+                xi=base_params['xi'],
+                T_t0=T_t0
+            )
+            prices.append(price)
+        plt.plot(maturities, prices, ':', label=f'θ={theta_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('Variance Futures Price')
+    plt.title('Term Structure of Variance Futures: Effect of Long-term Mean (θ)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 3. Effect of Xi (volatility of volatility)
+    plt.figure(figsize=(12, 8))
+    plt.plot(maturities, base_prices, 'k-', linewidth=2, label=f'Base Case (ξ={base_params["xi"]})')
+    
+    for xi_val in [0.2, 0.3, 0.5, 0.7, 0.9]:
+        if abs(xi_val - base_params['xi']) < 1e-6:
+            continue  # Skip base case as it's already plotted
+        prices = []
+        for T_t in maturities:
+            price = compute_variance_futures(
+                T_t=T_t,
+                accrued_variance=accrued_variance,
+                Vt=base_params['Vt'],
+                lambda_=base_params['lambda_'],
+                theta=base_params['theta'],
+                xi=xi_val,
+                T_t0=T_t0
+            )
+            prices.append(price)
+        plt.plot(maturities, prices, '-.', label=f'ξ={xi_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('Variance Futures Price')
+    plt.title('Term Structure of Variance Futures: Effect of Volatility of Volatility (ξ)')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 4. Effect of Vt vs Theta relationship
+    plt.figure(figsize=(12, 8))
+    
+    # Various combinations of Vt and theta
+    scenarios = [
+        {'Vt': 0.08, 'theta': 0.03, 'label': 'Vt(0.08) > θ(0.03)', 'color': 'b'},
+        {'Vt': 0.05, 'theta': 0.05, 'label': 'Vt(0.05) = θ(0.05)', 'color': 'g'},
+        {'Vt': 0.03, 'theta': 0.08, 'label': 'Vt(0.03) < θ(0.08)', 'color': 'r'},
+        {'Vt': 0.02, 'theta': 0.09, 'label': 'Vt(0.02) << θ(0.09)', 'color': 'm'},
+        {'Vt': 0.09, 'theta': 0.02, 'label': 'Vt(0.09) >> θ(0.02)', 'color': 'c'}
+    ]
+    
+    for scenario in scenarios:
+        prices = []
+        for T_t in maturities:
+            price = compute_variance_futures(
+                T_t=T_t,
+                accrued_variance=accrued_variance,
+                Vt=scenario['Vt'],
+                lambda_=base_params['lambda_'],
+                theta=scenario['theta'],
+                xi=base_params['xi'],
+                T_t0=T_t0
+            )
+            prices.append(price)
+        plt.plot(maturities, prices, color=scenario['color'], linewidth=2, label=scenario['label'])
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('Variance Futures Price')
+    plt.title('Term Structure of Variance Futures: Effect of Vt vs θ Relationship')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 5. Effect of accrued variance
+    plt.figure(figsize=(12, 8))
+    
+    for acc_var in [0.01, 0.02, 0.05, 0.10, 0.15]:
+        prices = []
+        for T_t in maturities:
+            price = compute_variance_futures(
+                T_t=T_t,
+                accrued_variance=acc_var,
+                Vt=base_params['Vt'],
+                lambda_=base_params['lambda_'],
+                theta=base_params['theta'],
+                xi=base_params['xi'],
+                T_t0=T_t0
+            )
+            prices.append(price)
+        plt.plot(maturities, prices, linewidth=2, label=f'Accrued Var={acc_var}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('Variance Futures Price')
+    plt.title('Term Structure of Variance Futures: Effect of Accrued Variance')
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+    
+    # 6. Comparison of different T_t0 values
+    plt.figure(figsize=(12, 8))
+    
+    for t0_val in [1.0, 2.0, 3.0, 5.0]:
+        # Adjust maturities to not exceed T_t0
+        valid_mats = np.linspace(0.1, t0_val * 0.95, 30)
+        prices = []
+        for T_t in valid_mats:
+            price = compute_variance_futures(
+                T_t=T_t,
+                accrued_variance=accrued_variance,
+                Vt=base_params['Vt'],
+                lambda_=base_params['lambda_'],
+                theta=base_params['theta'],
+                xi=base_params['xi'],
+                T_t0=t0_val
+            )
+            prices.append(price)
+        plt.plot(valid_mats, prices, linewidth=2, label=f'T_t0={t0_val}')
+    
+    plt.xlabel('Time to Maturity (Years)')
+    plt.ylabel('Variance Futures Price')
+    plt.title('Term Structure of Variance Futures: Effect of Total Time Span (T_t0)')
     plt.grid(True)
     plt.legend()
     plt.show()
@@ -306,11 +427,11 @@ def run_comprehensive_analysis(base_params):
     """
 
     
-    print("1. Analyzing individual parameter sensitivity...")
-    analyze_individual_parameters(base_params)
+    # print("1. Analyzing individual parameter sensitivity...")
+    # analyze_individual_parameters(base_params)
     
-    print("\n2. Analyzing parameter pair interactions...")
-    analyze_parameter_pairs(base_params)
+    # print("\n2. Analyzing parameter pair interactions...")
+    # analyze_parameter_pairs(base_params)
     
     print("\n3. Analyzing term structure effects...")
     analyze_term_structure(base_params)
